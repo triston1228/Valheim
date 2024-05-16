@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,26 +11,26 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
 {
     public static class InventoryItemRemover
     {
-        public static void IterateAndRemoveItemsFromInventories(Player player, List<TrackedContainer> containers,
-            string itemName, int amount, out RemovalReport report)
+        public static void IterateAndRemoveItemsFromInventories(Player player, List<TrackedContainer> containers, string itemName, int amount, int itemQuality, bool worldLevelBased, out RemovalReport report)
         {
-            var useEQSWorkaround = Player.m_localPlayer.GetInventory().GetType().FullName ==
-                                   "EquipmentAndQuickSlots.ExtendedInventory";
+            var useEQSWorkaround = Player.m_localPlayer.GetInventory().GetType().FullName == "EquipmentAndQuickSlots.ExtendedInventory";
             report = new RemovalReport(itemName, amount);
             var leftToRemove = amount;
+
+            Plugin.Log.LogDebug($"Starting removal. Need to remove {leftToRemove} of {itemName}");
 
             if (leftToRemove > 0)
             {
                 var itemsRemoved = 0;
                 if (useEQSWorkaround)
                 {
-                    //we don't actually remove anything. Let E&Q do the job here
-                    itemsRemoved = Math.Min(player.GetInventory().CountItemsOriginal(itemName), leftToRemove);
+                    itemsRemoved = Math.Min(player.GetInventory().CountItems(itemName, itemQuality, worldLevelBased), leftToRemove);
                     Plugin.Log.LogDebug($"EQS detected. Not taking items {itemsRemoved} from player inventory and leaving that to EQS");
                 }
                 else
                 {
-                    itemsRemoved = player.GetInventory().RemoveItemAsMuchAsPossible(itemName, leftToRemove);
+                    itemsRemoved = player.GetInventory().RemoveItemAsMuchAsPossible(itemName, leftToRemove, itemQuality, worldLevelBased);
+                    Plugin.Log.LogDebug($"Removed {itemsRemoved} from player inventory");
                 }
 
                 leftToRemove -= itemsRemoved;
@@ -40,26 +40,29 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
 
             foreach (var tracked in containers)
             {
-                var itemsRemoved = tracked.Container.GetInventory().RemoveItemAsMuchAsPossible(itemName, leftToRemove);
+                if (leftToRemove <= 0)
+                    break;
+
+                var containerInventory = tracked.Container.GetInventory();
+                var itemsRemoved = containerInventory.RemoveItemAsMuchAsPossible(itemName, leftToRemove, itemQuality, worldLevelBased);
                 leftToRemove -= itemsRemoved;
+
+                Plugin.Log.LogDebug($"Removed {itemsRemoved} from container {tracked.Container.GetHashCode()}");
+
                 if (itemsRemoved > 0)
                 {
                     report.Removals.Add(new RemovalReport.RemovalReportEntry(false, tracked, itemsRemoved));
                     UpdateContainerNetworkData(player, tracked, itemName, amount);
                 }
-                
-                if (leftToRemove == 0)
-                    break;
             }
-            
+
             if (leftToRemove != 0 || Plugin.Settings.DebugForcePrintRemovalReport.Value)
             {
                 var nearbyPlayers = new List<Character>();
-                Character.GetCharactersInRange(player.transform.position, Plugin.Settings.ContainerLookupRange.Value,
-                    nearbyPlayers);
+                Character.GetCharactersInRange(player.transform.position, Plugin.Settings.ContainerLookupRange.Value, nearbyPlayers);
                 var playerCount = nearbyPlayers.Count(character => character.IsPlayer());
-                Plugin.Log.LogWarning("Invalid state reached (or dump explicitly requested)! \n" +
-                                      "You might want to report this to the mod developer.\n" +
+                Plugin.Log.LogWarning($"Invalid state reached (or dump explicitly requested)! \n" +
+                                      $"You might want to report this to the mod developer.\n" +
                                       $"When removing {amount} of {itemName}, amount of resources left to remove was still {leftToRemove}\n" +
                                       $"Containers: {containers.Count}. Players: {playerCount}.\n" +
                                       $"{report.GetReportString()}");
@@ -78,11 +81,9 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
             container.NetworkExtension.RequestItemRemoval(player.GetPlayerID(), itemName, amount);
         }
 
-        public static void RemoveFromSpecificContainer(ItemDrop.ItemData item, TrackedContainer usedContainer,
-            Player player)
+        public static void RemoveFromSpecificContainer(ItemDrop.ItemData item, TrackedContainer usedContainer, Player player)
         {
-            Plugin.Log.LogDebug(
-                $"{player.GetPlayerName()} requested removal of {item.m_shared.m_name} from {usedContainer.OwningPiece.m_name}");
+            Plugin.Log.LogDebug($"{player.GetPlayerName()} requested removal of {item.m_shared.m_name} from {usedContainer.OwningPiece.m_name}");
             usedContainer.Container.GetInventory().RemoveItem(item, 1);
             UpdateContainerNetworkData(player, usedContainer, item.m_shared.m_name, 1);
             SpawnEffect(player, usedContainer);
@@ -90,10 +91,8 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
 
         public static void SpawnEffect(Player player, TrackedContainer container)
         {
-            Plugin.Log.LogDebug(
-                $"Attaching effect between player {player.GetPlayerName()} and {container.Container.m_name}({container.ZNetView.GetZDO().m_uid})");
-            LineEffectCreator.Create(container.Container.transform.position, player.transform,
-                0.1f, 0.01f, 0.3f, 0.5f);
+            Plugin.Log.LogDebug($"Attaching effect between player {player.GetPlayerName()} and {container.Container.m_name}({container.ZNetView.GetZDO().m_uid})");
+            LineEffectCreator.Create(container.Container.transform.position, player.transform, 0.1f, 0.01f, 0.3f, 0.5f);
         }
 
         public struct RemovalReport
@@ -111,8 +110,7 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
 
             public struct RemovalReportEntry
             {
-                public RemovalReportEntry(bool usedPlayerInventory, TrackedContainer? trackedContainer,
-                    int amountRemoved)
+                public RemovalReportEntry(bool usedPlayerInventory, TrackedContainer? trackedContainer, int amountRemoved)
                 {
                     UsedPlayerInventory = usedPlayerInventory;
                     TrackedContainer = trackedContainer;
@@ -127,24 +125,22 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Inventoring
             public string GetReportString(bool colorize = false)
             {
                 const string removedHeaderFormat = "Removal of {0} \"{1}\" touched {2} inventories\n";
-                const string removedHeaderFormatColor =
-                    "Removed <color=lightblue>{0}</color> <color=orange>\"{1}\"</color>. Touched <color=lightblue>{2}</color> inventories\n";
+                const string removedHeaderFormatColor = "Removed <color=lightblue>{0}</color> <color=orange>\"{1}\"</color>. Touched <color=lightblue>{2}</color> inventories\n";
                 const string playerEntryFormat = "Player: {0}\n";
                 const string playerEntryFormatColor = "<color=cyan>Player</color>: <color=lightblue>{0}</color>\n";
                 const string containerEntryFormat = "{0}: {1}\n";
                 const string containerEntryFormatColor = "<color=cyan>{0}</color>: <color=lightblue>{1}</color>\n";
 
                 var sb = new StringBuilder();
-                sb.AppendFormat(colorize ? removedHeaderFormatColor : removedHeaderFormat, Amount,
-                    Localization.instance.Localize(ItemName), Removals.Count);
+                sb.AppendFormat(colorize ? removedHeaderFormatColor : removedHeaderFormat, Amount, Localization.instance.Localize(ItemName), Removals.Count);
 
                 foreach (var removal in Removals)
+                {
                     if (removal.UsedPlayerInventory)
                         sb.AppendFormat(colorize ? playerEntryFormatColor : playerEntryFormat, removal.AmountRemoved);
                     else
-                        sb.AppendFormat(colorize ? containerEntryFormatColor : containerEntryFormat,
-                            Localization.instance.Localize(removal.TrackedContainer?.Container.m_name),
-                            removal.AmountRemoved);
+                        sb.AppendFormat(colorize ? containerEntryFormatColor : containerEntryFormat, Localization.instance.Localize(removal.TrackedContainer?.Container.m_name), removal.AmountRemoved);
+                }
 
                 return sb.ToString();
             }
