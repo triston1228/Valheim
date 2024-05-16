@@ -1,95 +1,76 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ABearCodes.Valheim.CraftingWithContainers.Common;
+using ABearCodes.Valheim.CraftingWithContainers.Inventoring;
+using ABearCodes.Valheim.CraftingWithContainers.Tracking;
 using HarmonyLib;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
-namespace ABearCodes.Valheim.CraftingWithContainers.Common
+namespace ABearCodes.Valheim.CraftingWithContainers.UI
 {
     [HarmonyPatch]
-    public static class ReversePatches
+    public class UIVisualPatches
     {
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "CountItems")]
-        public static int CountItemsOriginal(this Inventory __instance, string name)
+        [HarmonyPatch(typeof(InventoryGui), "SetupRequirement", typeof(Transform), typeof(Piece.Requirement), typeof(Player), typeof(bool), typeof(int))]
+        [HarmonyPrefix]
+        private static bool SetupRequirementTotalItemsIndicatorPatch(Transform elementRoot, Piece.Requirement req, Player player, bool craft, int quality, ref bool __result)
         {
-            throw new NotImplementedException("stub");
+            if (!Plugin.Settings.CraftingWithContainersEnabled.Value || !Plugin.Settings.ModifyItemCountIndicator.Value)
+                return true;
+
+            if (elementRoot == null || req == null || player == null) return true;
+
+            var iconImage = elementRoot.transform.Find("res_icon")?.GetComponent<Image>();
+            var nameText = elementRoot.transform.Find("res_name")?.GetComponent<TMP_Text>();
+            var amountText = elementRoot.transform.Find("res_amount")?.GetComponent<TMP_Text>();
+            var tooltip = elementRoot.GetComponent<UITooltip>();
+
+            if (iconImage == null || nameText == null || amountText == null || tooltip == null || req.m_resItem == null) return true;
+
+            iconImage.gameObject.SetActive(true);
+            nameText.gameObject.SetActive(true);
+            amountText.gameObject.SetActive(true);
+
+            var itemData = req.m_resItem.m_itemData;
+            iconImage.sprite = itemData.GetIcon();
+            iconImage.color = Color.white;
+            tooltip.m_text = Localization.instance.Localize(itemData.m_shared.m_name);
+            nameText.text = Localization.instance.Localize(itemData.m_shared.m_name);
+
+            // Get the combined item count using the patched CountItems method
+            var totalItemCount = player.GetInventory().CountItems(itemData.m_shared.m_name, quality, craft);
+
+            // Log the total item count
+            Plugin.Log.LogInfo($"Total item count for {itemData.m_shared.m_name}: {totalItemCount}");
+
+            // Get the amount required from Piece.Requirement
+            var amountRequired = req.GetAmount(quality);
+
+            // Log amount required
+            Plugin.Log.LogInfo($"Amount required for {itemData.m_shared.m_name}: {amountRequired}");
+
+            if (amountRequired <= 0)
+            {
+                InventoryGui.HideRequirement(elementRoot);
+                __result = false;
+                return false;
+            }
+
+            // Update the amount text with total item count and amount required
+            amountText.text = string.Format($"{totalItemCount}/{amountRequired}");
+            amountText.color = totalItemCount < amountRequired ? (Mathf.Sin(Time.time * 10f) > 0.0 ? Color.red : Color.white) : Color.white;
+
+            __result = true;
+            return false;
+
+
         }
 
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "RemoveItem", typeof(string), typeof(int))]
-        public static void RemoveItemOriginal(this Inventory __instance, string name, int amount)
-        {
-            throw new NotImplementedException("stub");
-        }
 
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Container), "CheckAccess", typeof(long))]
-        public static bool CheckAccess(this Container instance, long playerID)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Container), "Save")]
-        public static void Save(this Container instance)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "Changed")]
-        public static void Changed(this Inventory instance)
-        {
-            throw new NotImplementedException("stub");
-        }
+    } 
 
 
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "HaveItem", typeof(string))]
-        public static bool HaveItemOriginal(this Inventory instance, string name)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(InventoryGui), "UpdateCraftingPanel")]
-        public static void UpdateCraftingPanel(this InventoryGui instance, bool focus)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Chat), "AddString",
-            typeof(string), typeof(string), typeof(Talker.Type))]
-        public static void AddString(this Chat instance, string user, string text, Talker.Type type)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Smelter), "GetFuel")]
-        public static float GetFuel(this Smelter instance)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Smelter), "FindCookableItem", typeof(Inventory))]
-        public static ItemDrop.ItemData FindCookableItem(this Smelter instance, Inventory inventory)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Smelter), "IsItemAllowed", typeof(string))]
-        public static bool IsItemAllowed(this Smelter instance, string itemName)
-        {
-            throw new NotImplementedException("stub");
-        }
-
-        [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Smelter), "GetQueueSize")]
-        public static int GetQueueSize(this Smelter instance)
-        {
-            throw new NotImplementedException("");
-        }
-    }
 }
