@@ -29,16 +29,21 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Tracking
         
         private void RPC_RemoveItemRequest(long uid, long playerId, string itemName, int amount)
         {
-            Plugin.Log.LogDebug($"Player {uid} wants to remove item {itemName} ({amount} from {_zNetView.GetZDO().m_uid.id})");
+            Plugin.Log.LogDebug($"Player {uid} wants to remove item {itemName} ({amount}) from container {_zNetView.GetZDO().m_uid.ID}");
+
             if (!_zNetView.IsOwner())
             {
-                Plugin.Log.LogDebug("  but im not the owner");
+                Plugin.Log.LogDebug("  but I'm not the owner");
             }
             else
             {
                 Plugin.Log.LogDebug($"Removing {amount} of {itemName} from requested container");
-                _container.GetInventory().RemoveItemOriginal(itemName, amount);
-                _container.GetInventory().Changed();
+                var inventory = _container.GetInventory();
+
+                // Use the RemoveItemOriginal method with appropriate parameters
+                ReversePatches.RemoveItemOriginal(inventory, itemName, amount, -1, true);
+
+                inventory.Changed();
                 _container.Save();
             }
         }
