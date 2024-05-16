@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using HarmonyLib;
 
 namespace ABearCodes.Valheim.CraftingWithContainers.Common
@@ -6,17 +6,28 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Common
     [HarmonyPatch]
     public static class ReversePatches
     {
+
         [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "CountItems")]
-        public static int CountItemsOriginal(this Inventory __instance, string name)
+        [HarmonyPatch(typeof(InventoryGui), "DoCrafting")]
+        public static void DoCraftingOriginal(InventoryGui __instance, Player player)
         {
+            // This will be replaced by Harmony with the original method
             throw new NotImplementedException("stub");
         }
 
         [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "RemoveItem", typeof(string), typeof(int))]
-        public static void RemoveItemOriginal(this Inventory __instance, string name, int amount)
+        [HarmonyPatch(typeof(Inventory), "CountItems", typeof(string), typeof(int), typeof(bool))]
+        public static int CountItemsOriginal(Inventory instance, string name, int quality, bool matchWorldLevel)
         {
+            // This will be filled by Harmony
+            throw new NotImplementedException("stub");
+        }
+
+        [HarmonyReversePatch]
+        [HarmonyPatch(typeof(Inventory), "RemoveItem", typeof(string), typeof(int), typeof(int), typeof(bool))]
+        public static void RemoveItemOriginal(Inventory instance, string name, int amount, int itemQuality, bool worldLevelBased)
+        {
+            // This will be filled by Harmony
             throw new NotImplementedException("stub");
         }
 
@@ -41,25 +52,23 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Common
             throw new NotImplementedException("stub");
         }
 
-
         [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Inventory), "HaveItem", typeof(string))]
-        public static bool HaveItemOriginal(this Inventory instance, string name)
+        [HarmonyPatch(typeof(Inventory), "HaveItem", typeof(string), typeof(bool))]
+        public static bool HaveItemOriginal(this Inventory __instance, string name, bool matchWorldLevel)
         {
             throw new NotImplementedException("stub");
         }
 
         [HarmonyReversePatch]
-        [HarmonyPatch(typeof(InventoryGui), "UpdateCraftingPanel")]
+        [HarmonyPatch(typeof(InventoryGui), "UpdateCraftingPanel", typeof(bool))]
         public static void UpdateCraftingPanel(this InventoryGui instance, bool focus)
         {
             throw new NotImplementedException("stub");
         }
 
         [HarmonyReversePatch]
-        [HarmonyPatch(typeof(Chat), "AddString",
-            typeof(string), typeof(string), typeof(Talker.Type))]
-        public static void AddString(this Chat instance, string user, string text, Talker.Type type)
+        [HarmonyPatch(typeof(Terminal), "AddString", typeof(string), typeof(string), typeof(Talker.Type), typeof(bool))]
+        public static void AddString(this Terminal instance, string user, string text, Talker.Type type, bool timestamp = false)
         {
             throw new NotImplementedException("stub");
         }
