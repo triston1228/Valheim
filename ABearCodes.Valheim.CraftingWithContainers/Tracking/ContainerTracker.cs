@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
 
@@ -20,6 +20,8 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Tracking
             var extension = new ContainerNetworkExtension(container, zNetView);
             extension.Register();
             _networkExtensions[container.GetInstanceID()] = extension;
+
+            Plugin.Log.LogDebug($"Added container: {container.m_name} with ID: {container.GetInstanceID()}");
         }
 
         public static void Remove(Container container)
@@ -29,32 +31,35 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Tracking
                 return;
             extension.Unregister();
             _networkExtensions.Remove(container.GetInstanceID());
+
+            Plugin.Log.LogDebug($"Removed container: {container.m_name} with ID: {container.GetInstanceID()}");
         }
 
         public static List<TrackedContainer> GetViableContainersInRangeForPlayer(Player player, float range)
         {
-            return ContainerSearcher.SearchForViablePlayerContainers(_containers, player, range);
+            var viableContainers = ContainerSearcher.SearchForViablePlayerContainers(_containers, player, range);
+            Plugin.Log.LogDebug($"Player {player.GetPlayerName()} has {viableContainers.Count} viable containers in range {range}");
+            return viableContainers;
         }
 
-        /// <summary>
-        ///     Only used when hot-reloading scripts
-        /// </summary>
         public static void ForceScanContainers()
         {
             _containers.Clear();
             _networkExtensions.Clear();
             PlayerByInventoryDict.Clear();
+
             var containers = GameObject.FindObjectsOfType<Container>();
             Plugin.Log.LogDebug($"Found a total of {containers.Length} containers");
+
             foreach (var container in containers)
             {
-                var zNetView = (ZNetView) AccessTools.Field(typeof(Container), "m_nview").GetValue(container);
+                var zNetView = (ZNetView)AccessTools.Field(typeof(Container), "m_nview").GetValue(container);
                 var piece = zNetView.GetComponent<Piece>();
-                if (zNetView == null || zNetView.GetZDO()?.m_uid == null ||
-                    piece == null)
+
+                if (zNetView == null || zNetView.GetZDO()?.m_uid == null || piece == null)
                 {
                     Plugin.Log.LogDebug(
-                        $"Will not track container {container.m_name} ({container.name}). Inventory hash: {container.GetInventory().GetHashCode()} ZNetView: {zNetView.GetZDO()?.m_uid}.");
+                        $"Will not track container {container.m_name} ({container.name}). Inventory hash: {container.GetInventory().GetHashCode()} ZNetView: {zNetView?.GetZDO()?.m_uid}.");
                     continue;
                 }
 
@@ -64,7 +69,11 @@ namespace ABearCodes.Valheim.CraftingWithContainers.Tracking
             Plugin.Log.LogDebug($"Added {_containers.Count} containers");
 
             foreach (var player in Player.GetAllPlayers())
+            {
                 PlayerByInventoryDict[player.GetInventory().GetHashCode()] = player;
+                Plugin.Log.LogDebug($"Player {player.GetPlayerName()} added with inventory hash: {player.GetInventory().GetHashCode()}");
+            }
+
             Plugin.Log.LogDebug($"Added {PlayerByInventoryDict.Count} players");
         }
     }
